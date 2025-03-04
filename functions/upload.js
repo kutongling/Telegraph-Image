@@ -1,28 +1,27 @@
-import { errorHandling， telemetryData } from "./utils/middleware";
+import { errorHandling, telemetryData } from "./utils/middleware";
 
 export async function onRequestPost(context) {
-    const { request， env } = context;
+    const { request, env } = context;
 
     try {
-
-        const clonedRequest = request。clone();
-        const formData = await clonedRequest。formData();
+        const clonedRequest = request.clone();
+        const formData = await clonedRequest.formData();
 
         await errorHandling(context);
         telemetryData(context);
 
-        const uploadFile = formData。get('file');
+        const uploadFile = formData.get('file');
         if (!uploadFile) {
-            throw new 错误('No file uploaded');
+            throw new Error('No file uploaded');
         }
 
-        const fileName = uploadFile。name;
-        const fileExtension = fileName。split('.')。pop()。toLowerCase();
+        const fileName = uploadFile.name;
+        const fileExtension = fileName.split('.').pop().toLowerCase();
 
         const telegramFormData = new FormData();
-        telegramFormData。append("chat_id"， env。TG_Chat_ID);
+        telegramFormData.append("chat_id", env.TG_Chat_ID);
 
-        // 根据文件类型选择合适的上传方式
+        // Choose appropriate upload method based on file type
         let apiEndpoint;
         // if (uploadFile.type.startsWith('image/')) {
         //     telegramFormData.append("photo", uploadFile);
@@ -31,63 +30,63 @@ export async function onRequestPost(context) {
         //     telegramFormData.append("audio", uploadFile);
         //     apiEndpoint = 'sendAudio';
         // } else {
-            telegramFormData。append("document"， uploadFile);
+            telegramFormData.append("document", uploadFile);
             apiEndpoint = 'sendDocument';
         // }
 
-        const apiUrl = `https://api.telegram.org/bot${env。TG_Bot_Token}/${apiEndpoint}`;
-        console。log('Sending request to:'， apiUrl);
+        const apiUrl = `https://api.telegram.org/bot${env.TG_Bot_Token}/${apiEndpoint}`;
+        console.log('Sending request to:', apiUrl);
 
         const response = await fetch(
-            apiUrl，
+            apiUrl,
             {
-                method: "POST"，
+                method: "POST",
                 body: telegramFormData
             }
         );
 
-        console。log('Response status:'， response。status);
+        console.log('Response status:', response.status);
 
-        const responseData = await response。json();
+        const responseData = await response.json();
 
-        if (!response。ok) {
-            console。error('Error response from Telegram API:'， responseData);
-            throw new 错误(responseData。description || 'Upload to Telegram failed');
+        if (!response.ok) {
+            console.error('Error response from Telegram API:', responseData);
+            throw new Error(responseData.description || 'Upload to Telegram failed');
         }
 
         const fileId = getFileId(responseData);
 
         if (!fileId) {
-            throw new 错误('Failed to get file ID');
+            throw new Error('Failed to get file ID');
         }
 
-        // 将文件信息保存到 KV 存储
-        if (env。img_url) {
-            await env。img_url。put(`${fileId}。${fileExtension}`， ""， {
+        // Save file information to KV storage
+        if (env.img_url) {
+            await env.img_url.put(`${fileId}.${fileExtension}`, "", {
                 metadata: {
-                    TimeStamp: Date。当前()，
-                    ListType: "None"，
-                    Label: "None"，
-                    liked: false，
-                    fileName: fileName，
-                    fileSize: uploadFile。size，
+                    TimeStamp: Date.now(),
+                    ListType: "None",
+                    Label: "None",
+                    liked: false,
+                    fileName: fileName,
+                    fileSize: uploadFile.size,
                 }
             });
         }
 
         return new Response(
-            JSON。stringify([{ 'src': `/file/${fileId}。${fileExtension}` }])，
+            JSON.stringify([{ 'src': `/file/${fileId}.${fileExtension}` }]),
             {
-                status: 200，
+                status: 200,
                 headers: { 'Content-Type': 'application/json' }
             }
         );
     } catch (error) {
-        console。error('Upload error:'， error);
+        console.error('Upload error:', error);
         return new Response(
-            JSON。stringify({ error: error。message })，
+            JSON.stringify({ error: error.message }),
             {
-                status: 500，
+                status: 500,
                 headers: { 'Content-Type': 'application/json' }
             }
         );
@@ -95,15 +94,15 @@ export async function onRequestPost(context) {
 }
 
 function getFileId(response) {
-    if (!response。ok || !response。result) return null;
+    if (!response.ok || !response.result) return null;
 
-    const result = response。result;
+    const result = response.result;
     // if (result.photo) {
     //     return result.photo.reduce((prev, current) =>
     //         (prev.file_size > current.file_size) ? prev : current
     //     ).file_id;
     // }
-    if (result。document) return result。document。file_id;
+    if (result.document) return result.document.file_id;
     // if (result.video) return result.video.file_id;
     // if (result.audio) return result.audio.file_id;
 
